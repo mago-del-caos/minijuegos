@@ -77,6 +77,11 @@
     const COLS = 10, FILAS = 20, B = 30;
     const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
     const cara = new Image(); cara.src = "chema-cara.png";
+    // Sprites oficiales de los bloques (plantilla recortada): un bloque con la cara de Chema por color
+    const BLOQUES = {};
+    ["i", "o", "t", "s", "z", "j", "l"].forEach(function (k) {
+        const im = new Image(); im.src = "bloque-" + k + ".png"; BLOQUES[k.toUpperCase()] = im;
+    });
 
     const FORMAS = {
         I: { color: "#29b6f6", caja: 4, celdas: [[0,1],[1,1],[2,1],[3,1]] },
@@ -110,7 +115,7 @@
         pieza.celdas.forEach(function (c) {
             const x = pieza.x + c[0], y = pieza.y + c[1];
             if (y < 0) { finDelJuego(); return; }
-            tablero[y][x] = pieza.color;
+            tablero[y][x] = pieza.tipo;
         });
         if (!jugando) return;
         let limpias = 0;
@@ -130,8 +135,14 @@
         pieza = nuevaPieza();
         if (choca(pieza, 0, 0)) finDelJuego();
     }
-    function dibujarBloque(x, y, color) {
+    function dibujarBloque(x, y, tipo) {
         const px = x * B, py = y * B;
+        const spr = BLOQUES[tipo];
+        if (spr && spr.complete && spr.naturalWidth > 0) {
+            ctx.drawImage(spr, px, py, B, B);
+            return;
+        }
+        const color = FORMAS[tipo] ? FORMAS[tipo].color : "#888";
         ctx.fillStyle = color;
         ctx.fillRect(px + 1, py + 1, B - 2, B - 2);
         ctx.fillStyle = "rgba(255,255,255,.28)";
@@ -150,7 +161,7 @@
         ctx.strokeStyle = "rgba(255,255,255,.05)";
         for (let x = 1; x < COLS; x++) { ctx.beginPath(); ctx.moveTo(x * B, 0); ctx.lineTo(x * B, cv.height); ctx.stroke(); }
         for (let y = 0; y < FILAS; y++) for (let x = 0; x < COLS; x++) if (tablero[y][x]) dibujarBloque(x, y, tablero[y][x]);
-        if (pieza && jugando) pieza.celdas.forEach(function (c) { dibujarBloque(pieza.x + c[0], pieza.y + c[1], pieza.color); });
+        if (pieza && jugando) pieza.celdas.forEach(function (c) { dibujarBloque(pieza.x + c[0], pieza.y + c[1], pieza.tipo); });
     }
     function bucle(t) {
         if (jugando) {

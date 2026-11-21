@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>Avión Chema — Minijuegos</title>
+<title>Avión Chema — Chema-tron</title>
 <style>
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
     body { font-family:'Segoe UI', system-ui, sans-serif; background:#0b1e3a; color:#fff; min-height:100dvh; display:flex; flex-direction:column; align-items:center; }
@@ -42,7 +42,7 @@
     <canvas id="cv" width="440" height="620"></canvas>
     <div class="panel visible" id="panelInicio">
         <h2>✈️ Avión Chema</h2>
-        <p>Chema pilota el avión. Arrastra para moverte (o usa las flechas); el disparo es automático. Derriba aviones enemigos, recoge estrellas ⭐ y no dejes que te toquen.</p>
+        <p>Chema pilota el avión. Arrastra para moverte (o usa las flechas); el disparo es automático. Cuidado: desde el nivel 2 llegan drones en zigzag y desde el nivel 3 los aviones enemigos también disparan.</p>
         <button class="btn btn-dorado" id="btnJugar">¡A volar!</button>
         <button class="btn btn-azul" id="btnTopInicio">🏆 Ver Top 10</button>
         <div id="topInicio"></div>
@@ -66,41 +66,56 @@
     const JUEGO = "avion";
     const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
     const W = cv.width, H = cv.height;
-    const cara = new Image(); cara.src = "chema-cara.png";
-    const estrellaImg = new Image(); estrellaImg.src = "estrella.png";
+
+    // ===== Sprites (plantilla recortada) =====
+    function cargar(src) { const i = new Image(); i.src = src; return i; }
+    const SPR = {
+        jugador: cargar("sprite-jugador.png"),
+        enemigo: cargar("sprite-enemigo.png"),
+        dron: cargar("sprite-dron.png"),
+        bala: cargar("sprite-bala.png"),
+        explosion: cargar("sprite-explosion.png"),
+        estrella: cargar("sprite-estrella.png")
+    };
+    function listo(img) { return img.complete && img.naturalWidth > 0; }
+    function dibSprite(img, x, y, ancho, rot) {
+        if (!listo(img)) return false;
+        const alto = ancho * img.naturalHeight / img.naturalWidth;
+        ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot);
+        ctx.drawImage(img, -ancho / 2, -alto / 2, ancho, alto);
+        ctx.restore();
+        return true;
+    }
+    // Respaldo vectorial por si un sprite no carga
+    function dibAvionFormas(x, y, enemigo) {
+        ctx.save(); ctx.translate(x, y); if (enemigo) ctx.rotate(Math.PI);
+        ctx.fillStyle = enemigo ? "#c0392b" : "#1d6fd1";
+        ctx.beginPath(); ctx.moveTo(0, -26); ctx.quadraticCurveTo(7, -8, 6, 16); ctx.lineTo(-6, 16); ctx.quadraticCurveTo(-7, -8, 0, -26); ctx.fill();
+        ctx.fillStyle = enemigo ? "#e74c3c" : "#3f8fe0";
+        ctx.beginPath(); ctx.moveTo(-30, 10); ctx.lineTo(30, 10); ctx.lineTo(20, 20); ctx.lineTo(-20, 20); ctx.closePath(); ctx.fill();
+        ctx.restore();
+    }
 
     let jugando = false, puntos = 0, vidas = 3, nivel = 1, frame = 0;
-    let balas = [], enemigos = [], estrellas = [], explosiones = [], nubes = [];
-    const avion = { x: W / 2, y: H - 110, w: 62, h: 62, tx: W / 2 };
+    let balas = [], enemigos = [], estrellas = [], explosiones = [], balasEnemigas = [], nubes = [];
+    let invulnerable = 0;
+    const avion = { x: W / 2, y: H - 110, tx: W / 2 };
     let teclas = {};
     let yaGuarde = false;
 
     for (let i = 0; i < 7; i++) nubes.push({ x: Math.random() * W, y: Math.random() * H, s: 22 + Math.random() * 36, v: .4 + Math.random() * .7 });
 
-    function dibujarAvion(x, y, escala, enemigo) {
-        ctx.save(); ctx.translate(x, y); ctx.scale(escala, escala);
-        if (enemigo) ctx.rotate(Math.PI);
-        ctx.fillStyle = enemigo ? "#c0392b" : "#1d6fd1";
-        ctx.beginPath(); // fuselaje
-        ctx.moveTo(0, -26); ctx.quadraticCurveTo(7, -8, 6, 16); ctx.lineTo(-6, 16); ctx.quadraticCurveTo(-7, -8, 0, -26); ctx.fill();
-        ctx.fillStyle = enemigo ? "#e74c3c" : "#3f8fe0"; // alas
-        ctx.beginPath(); ctx.moveTo(-30, 10); ctx.lineTo(30, 10); ctx.lineTo(20, 20); ctx.lineTo(-20, 20); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = enemigo ? "#922b21" : "#155a9e"; // cola
-        ctx.beginPath(); ctx.moveTo(-13, 22); ctx.lineTo(13, 22); ctx.lineTo(8, 29); ctx.lineTo(-8, 29); ctx.closePath(); ctx.fill();
-        ctx.restore();
-        if (!enemigo && cara.complete && cara.naturalWidth) {
-            ctx.save();
-            ctx.beginPath(); ctx.arc(x, y - 6, 13, 0, Math.PI * 2); ctx.clip();
-            ctx.drawImage(cara, x - 15, y - 19, 30, 22);
-            ctx.restore();
-            ctx.strokeStyle = "rgba(3,42,96,.6)"; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(x, y - 6, 13, 0, Math.PI * 2); ctx.stroke();
-        }
+    function explotar(x, y, grande) {
+        explosiones.push({ x: x, y: y, t: 0, max: grande ? 26 : 18, ancho: grande ? 120 : 84 });
+        if (navigator.vibrate) navigator.vibrate(40);
     }
 
-    function explotar(x, y) {
-        for (let i = 0; i < 14; i++) explosiones.push({ x, y, vx: (Math.random() - .5) * 4, vy: (Math.random() - .5) * 4, r: 2 + Math.random() * 4, vida: 22 + Math.random() * 12 });
-        if (navigator.vibrate) navigator.vibrate(40);
+    function perderVida() {
+        vidas--; pintarHud();
+        if (vidas <= 0) { finDelJuego(); return; }
+        invulnerable = 80;
+        avion.x = W / 2; avion.tx = W / 2; avion.y = H - 110;
+        balasEnemigas = [];
     }
 
     function paso() {
@@ -112,7 +127,11 @@
             n.y += n.v + 1.1; if (n.y > H + 40) { n.y = -40; n.x = Math.random() * W; }
             ctx.beginPath(); ctx.arc(n.x, n.y, n.s, 0, Math.PI * 2); ctx.arc(n.x + n.s * .7, n.y + 4, n.s * .7, 0, Math.PI * 2); ctx.fill();
         });
+
         if (jugando) {
+            nivel = 1 + Math.floor(puntos / 220);
+            document.getElementById("nivel").textContent = nivel;
+            if (invulnerable > 0) invulnerable--;
             // movimiento
             if (teclas.ArrowLeft) avion.tx -= 5;
             if (teclas.ArrowRight) avion.tx += 5;
@@ -121,47 +140,86 @@
             avion.tx = Math.max(34, Math.min(W - 34, avion.tx));
             avion.y = Math.max(50, Math.min(H - 50, avion.y));
             avion.x += (avion.tx - avion.x) * .35;
-            // disparo
-            if (frame % 9 === 0) balas.push({ x: avion.x, y: avion.y - 30 });
-            // enemigos
-            const ritmo = Math.max(26, 62 - nivel * 5);
-            if (frame % ritmo === 0) enemigos.push({ x: 36 + Math.random() * (W - 72), y: -30, v: 1.6 + Math.random() * 1.3 + nivel * .22, vida: 1 });
-            if (frame % 540 === 0) estrellas.push({ x: 30 + Math.random() * (W - 60), y: -24, v: 2 });
-            nivel = 1 + Math.floor(puntos / 300);
-            document.getElementById("nivel").textContent = nivel;
+            // disparo del jugador
+            if (frame % 8 === 0) balas.push({ x: avion.x, y: avion.y - 34 });
+            // aparición de enemigos (más seguido y más rápido por nivel)
+            const ritmo = Math.max(16, 54 - nivel * 5);
+            if (frame % ritmo === 0) {
+                const esDron = nivel >= 2 && Math.random() < 0.35;
+                enemigos.push({
+                    x: 36 + Math.random() * (W - 72), y: -34,
+                    v: esDron ? 2.9 + nivel * .3 + Math.random() * .6 : 2.1 + nivel * .32 + Math.random() * .8,
+                    dron: esDron, fase: Math.random() * Math.PI * 2, disparo: 60 + Math.random() * 80, vida: 1
+                });
+            }
+            if (frame % 500 === 0) estrellas.push({ x: 30 + Math.random() * (W - 60), y: -24, v: 2.2 });
         }
-        // balas
-        ctx.fillStyle = "#FFD100";
-        balas = balas.filter(function (b) { b.y -= 9; return b.y > -12; });
-        balas.forEach(function (b) { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); ctx.fill(); });
+
+        // balas del jugador
+        balas = balas.filter(function (b) { b.y -= 10; return b.y > -14; });
+        balas.forEach(function (b) {
+            if (!dibSprite(SPR.bala, b.x, b.y, 20, 0)) { ctx.fillStyle = "#FFD100"; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); ctx.fill(); }
+        });
+        // balas enemigas
+        balasEnemigas = balasEnemigas.filter(function (b) { b.y += 4.6; return b.y < H + 14; });
+        balasEnemigas.forEach(function (b) {
+            ctx.fillStyle = "#ff4757";
+            ctx.shadowColor = "#ff4757"; ctx.shadowBlur = 8;
+            ctx.beginPath(); ctx.arc(b.x, b.y, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+            if (jugando && invulnerable <= 0 && Math.abs(b.x - avion.x) < 20 && Math.abs(b.y - avion.y) < 20) {
+                b.y = H + 99; explotar(avion.x, avion.y, true); perderVida();
+            }
+        });
         // estrellas
         estrellas = estrellas.filter(function (e) { e.y += e.v; return e.y < H + 30; });
         estrellas.forEach(function (e) {
-            if (estrellaImg.complete && estrellaImg.naturalWidth) ctx.drawImage(estrellaImg, e.x - 15, e.y - 15, 30, 30);
-            else { ctx.font = "24px serif"; ctx.fillText("⭐", e.x - 12, e.y + 8); }
+            if (!dibSprite(SPR.estrella, e.x, e.y, 38, 0)) { ctx.font = "24px serif"; ctx.fillText("⭐", e.x - 12, e.y + 8); }
             if (jugando && Math.abs(e.x - avion.x) < 34 && Math.abs(e.y - avion.y) < 34) { puntos += 25; e.y = H + 99; pintarHud(); }
         });
         // enemigos
-        enemigos = enemigos.filter(function (e) { e.y += e.v; return e.y < H + 40 && e.vida > 0; });
+        enemigos = enemigos.filter(function (e) { return e.y < H + 44 && e.vida > 0; });
         enemigos.forEach(function (e) {
-            dibujarAvion(e.x, e.y, .92, true);
-            balas.forEach(function (b) {
-                if (Math.abs(b.x - e.x) < 24 && Math.abs(b.y - e.y) < 24 && e.vida > 0) { e.vida = 0; b.y = -99; puntos += 10; explotar(e.x, e.y); pintarHud(); }
-            });
-            if (jugando && Math.abs(e.x - avion.x) < 40 && Math.abs(e.y - avion.y) < 40) {
-                e.vida = 0; explotar(avion.x, avion.y); vidas--; pintarHud();
-                if (vidas <= 0) finDelJuego(); else { avion.x = W / 2; avion.tx = W / 2; avion.y = H - 110; }
+            e.y += e.v;
+            if (e.dron) e.x += Math.sin(frame / 16 + e.fase) * 2.4;
+            e.x = Math.max(24, Math.min(W - 24, e.x));
+            // disparo enemigo desde el nivel 3
+            if (jugando && nivel >= 3 && !e.dron) {
+                e.disparo--;
+                if (e.disparo <= 0) { balasEnemigas.push({ x: e.x, y: e.y + 26 }); e.disparo = 105 + Math.random() * 60; }
             }
-            if (e.y > H - 6 && jugando) { e.vida = 0; vidas--; pintarHud(); if (vidas <= 0) finDelJuego(); }
+            const anchoE = e.dron ? 56 : 76;
+            if (e.dron) { if (!dibSprite(SPR.dron, e.x, e.y, anchoE, 0)) dibAvionFormas(e.x, e.y, true); }
+            else if (!dibSprite(SPR.enemigo, e.x, e.y, anchoE, Math.PI)) dibAvionFormas(e.x, e.y, true);
+            // impacto de balas del jugador
+            balas.forEach(function (b) {
+                const r = e.dron ? 24 : 28;
+                if (Math.abs(b.x - e.x) < r && Math.abs(b.y - e.y) < r && e.vida > 0) {
+                    e.vida = 0; b.y = -99; puntos += e.dron ? 15 : 10; explotar(e.x, e.y, false); pintarHud();
+                }
+            });
+            // choque con el jugador
+            if (jugando && invulnerable <= 0 && Math.abs(e.x - avion.x) < 38 && Math.abs(e.y - avion.y) < 38) {
+                e.vida = 0; explotar(avion.x, avion.y, true); perderVida();
+            }
+            // enemigo que se escapa por abajo
+            if (e.y > H - 4 && jugando) { e.vida = 0; perderVida(); }
         });
-        // explosiones
-        explosiones = explosiones.filter(function (p) { p.vida--; return p.vida > 0; });
+        // explosiones con sprite
+        explosiones = explosiones.filter(function (p) { p.t++; return p.t < p.max; });
         explosiones.forEach(function (p) {
-            p.x += p.vx; p.y += p.vy;
-            ctx.fillStyle = "rgba(255," + (100 + Math.floor(Math.random() * 100)) + ",30,.85)";
-            ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+            const k = p.t / p.max;
+            ctx.globalAlpha = 1 - k;
+            if (!dibSprite(SPR.explosion, p.x, p.y, p.ancho * (0.5 + k * 0.8), 0)) {
+                ctx.fillStyle = "rgba(255,140,30,.85)";
+                ctx.beginPath(); ctx.arc(p.x, p.y, 20 * (1 - k) + 6, 0, Math.PI * 2); ctx.fill();
+            }
+            ctx.globalAlpha = 1;
         });
-        dibujarAvion(avion.x, avion.y, 1.05, false);
+        // jugador (parpadea si es invulnerable)
+        if (!(invulnerable > 0 && Math.floor(frame / 5) % 2 === 0)) {
+            if (!dibSprite(SPR.jugador, avion.x, avion.y, 78, 0)) dibAvionFormas(avion.x, avion.y, false);
+        }
         requestAnimationFrame(paso);
     }
 
@@ -171,7 +229,8 @@
     }
 
     function empezar() {
-        puntos = 0; vidas = 3; nivel = 1; balas = []; enemigos = []; estrellas = []; yaGuarde = false;
+        puntos = 0; vidas = 3; nivel = 1; balas = []; enemigos = []; estrellas = []; balasEnemigas = []; explosiones = [];
+        invulnerable = 0; yaGuarde = false;
         avion.x = W / 2; avion.tx = W / 2; avion.y = H - 110;
         pintarHud();
         document.getElementById("panelInicio").classList.remove("visible");
