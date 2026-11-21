@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Minijuegos de Chema</title>
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Segoe UI', system-ui, sans-serif; background:linear-gradient(160deg, #032A60, #123c7a 55%, #5B3E99); color:#fff; min-height:100dvh; }
+    .wrap { max-width:860px; margin:0 auto; padding:26px 16px 40px; }
+    h1 { text-align:center; font-size:2rem; color:#FFD100; text-shadow:0 3px 10px rgba(0,0,0,.4); }
+    .sub { text-align:center; color:#cfe0ff; margin:6px 0 24px; }
+    .grid { display:grid; grid-template-columns:1fr; gap:14px; }
+    @media (min-width:640px){ .grid{ grid-template-columns:1fr 1fr; } }
+    .card { display:block; text-decoration:none; color:#fff; border-radius:18px; padding:20px; box-shadow:0 8px 22px rgba(0,0,0,.35); transition:transform .12s ease; }
+    .card:active { transform:scale(.98); }
+    .card .icono { font-size:2.6rem; }
+    .card h2 { margin:6px 0 4px; font-size:1.3rem; }
+    .card p { color:rgba(255,255,255,.85); font-size:.92rem; }
+    .c-flappy { background:linear-gradient(135deg,#1A7637,#2FA84F); }
+    .c-angry { background:linear-gradient(135deg,#c2570b,#e07b24); }
+    .c-avion { background:linear-gradient(135deg,#155a9e,#1d6fd1); }
+    .c-tetris { background:linear-gradient(135deg,#5e35b1,#7e57c2); }
+    .tops { margin-top:30px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16); border-radius:18px; padding:18px; }
+    .tops h2 { color:#FFD100; text-align:center; margin-bottom:6px; }
+    .tops .rejilla { display:grid; grid-template-columns:1fr; gap:16px; margin-top:10px; }
+    @media (min-width:640px){ .tops .rejilla{ grid-template-columns:1fr 1fr; } }
+    .tops h3 { font-size:1rem; margin-bottom:6px; }
+    table.top { border-collapse:collapse; width:100%; font-size:.9rem; }
+    table.top td, table.top th { padding:3px 7px; text-align:left; }
+    table.top td.pos { color:#FFD100; font-weight:800; width:32px; }
+    table.top td.pts { text-align:right; font-weight:700; }
+    .sin { color:#9fb6dd; font-size:.88rem; }
+    .pie { text-align:center; color:#8fa8d0; font-size:.8rem; margin-top:22px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+    <h1>🎮 Minijuegos de Chema</h1>
+    <p class="sub">Cuatro juegos, cuatro tablas de campeones. Las puntuaciones se guardan en la base de datos de Ag Lucem: el Top 10 es de todos.</p>
+    <div class="grid">
+        <a class="card c-flappy" href="juegos.html">
+            <div class="icono">🐦</div>
+            <h2>Chema Bird · Flappy</h2>
+            <p>Vuela entre tubos con Chema. Toca para aletear y no te estrelles.</p>
+        </a>
+        <a class="card c-angry" href="juegos.html">
+            <div class="icono">🎯</div>
+            <h2>Angry Chema</h2>
+            <p>Resortera y física: derriba las torres de los duendes en 3 niveles, con poder de hielo.</p>
+        </a>
+        <a class="card c-avion" href="avion.html">
+            <div class="icono">✈️</div>
+            <h2>Avión Chema</h2>
+            <p>El clásico juego de aviones: derriba enemigos, recoge estrellas y sobrevive.</p>
+        </a>
+        <a class="card c-tetris" href="tetris.html">
+            <div class="icono">🧩</div>
+            <h2>Tetris Chema</h2>
+            <p>El Tetris de siempre, con la cara de Chema en cada bloque.</p>
+        </a>
+    </div>
+
+    <section class="tops">
+        <h2>🏆 Mejores puntuaciones</h2>
+        <div class="rejilla">
+            <div><h3>🐦 Flappy</h3><div id="top-flappy"><p class="sin">Cargando…</p></div></div>
+            <div><h3>🎯 Angry Chema</h3><div id="top-angry"><p class="sin">Cargando…</p></div></div>
+            <div><h3>✈️ Avión Chema</h3><div id="top-avion"><p class="sin">Cargando…</p></div></div>
+            <div><h3>🧩 Tetris Chema</h3><div id="top-tetris"><p class="sin">Cargando…</p></div></div>
+        </div>
+    </section>
+    <p class="pie">Minijuegos del Instituto Juventud · Hechos con Chema el águila</p>
+</div>
+<script>
+(function () {
+    "use strict";
+    const API = "https://aglucem-api.adrian-camelot32.workers.dev";
+    function pintar(cont, mejores) {
+        if (!mejores || !mejores.length) { cont.innerHTML = '<p class="sin">Todavía no hay puntuaciones. ¡Sé el primero!</p>'; return; }
+        let h = '<table class="top">';
+        mejores.forEach(function (m, i) {
+            h += '<tr><td class="pos">' + (i + 1) + '.</td><td>' + String(m.nombre).replace(/</g, "&lt;") + '</td><td class="pts">' + m.puntos + '</td></tr>';
+        });
+        cont.innerHTML = h + "</table>";
+    }
+    ["flappy", "angry", "avion", "tetris"].forEach(function (j) {
+        const cont = document.getElementById("top-" + j);
+        fetch(API + "/juegos/" + j + "/puntuaciones")
+            .then(function (r) { if (!r.ok) throw new Error("sin"); return r.json(); })
+            .then(function (d) { pintar(cont, d.mejores); })
+            .catch(function () { cont.innerHTML = '<p class="sin">Sin conexión por ahora.</p>'; });
+    });
+})();
+</script>
+</body>
+</html>

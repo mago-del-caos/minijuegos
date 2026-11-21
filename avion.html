@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Avión Chema — Minijuegos</title>
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body { font-family:'Segoe UI', system-ui, sans-serif; background:#0b1e3a; color:#fff; min-height:100dvh; display:flex; flex-direction:column; align-items:center; }
+    header { width:100%; max-width:480px; display:flex; align-items:center; gap:10px; padding:10px 14px; }
+    header a { color:#FFD100; text-decoration:none; font-weight:800; }
+    header h1 { font-size:1.15rem; flex:1; text-align:center; }
+    #hud { width:100%; max-width:480px; display:flex; justify-content:space-between; padding:2px 16px 8px; font-weight:800; font-size:.95rem; }
+    #hud .vidas { color:#ff8a8a; letter-spacing:2px; }
+    #lienzoWrap { position:relative; width:min(96vw, 440px); }
+    canvas { width:100%; display:block; border-radius:14px; background:linear-gradient(#7ec8e3, #bfe8f7 55%, #e8f9ff); box-shadow:0 10px 30px rgba(0,0,0,.45); touch-action:none; }
+    .panel { position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; gap:10px; background:rgba(4,20,45,.82); border-radius:14px; padding:18px; text-align:center; }
+    .panel.visible { display:flex; }
+    .panel h2 { color:#FFD100; font-size:1.5rem; }
+    .panel p { color:#dfe7ff; font-size:.95rem; }
+    .panel input { width:80%; max-width:260px; padding:11px 13px; border-radius:10px; border:2px solid #FFD100; font-size:1rem; font-family:inherit; text-align:center; }
+    .btn { border:none; border-radius:12px; padding:12px 20px; font-weight:800; font-size:1rem; cursor:pointer; font-family:inherit; }
+    .btn-dorado { background:#FFD100; color:#032A60; }
+    .btn-azul { background:#1d6fd1; color:#fff; }
+    .error { color:#ff9c9c; font-size:.88rem; min-height:1.1em; }
+    table.top { border-collapse:collapse; width:100%; max-width:300px; font-size:.92rem; }
+    table.top td, table.top th { padding:4px 8px; text-align:left; }
+    table.top tr.mio { background:rgba(255,209,0,.25); border-radius:6px; font-weight:800; }
+    table.top td.pos { color:#FFD100; font-weight:800; width:34px; }
+    table.top td.pts { text-align:right; font-weight:700; }
+    .nota { color:#9fb6dd; font-size:.82rem; padding:10px 16px 18px; text-align:center; max-width:480px; }
+</style>
+</head>
+<body>
+<header>
+    <a href="index.html">← Menú</a>
+    <h1>✈️ Avión Chema</h1>
+    <span style="width:52px"></span>
+</header>
+<div id="hud"><span>Puntos: <span id="puntos">0</span></span><span class="vidas" id="vidas">♥♥♥</span><span>Nivel <span id="nivel">1</span></span></div>
+<div id="lienzoWrap">
+    <canvas id="cv" width="440" height="620"></canvas>
+    <div class="panel visible" id="panelInicio">
+        <h2>✈️ Avión Chema</h2>
+        <p>Chema pilota el avión. Arrastra para moverte (o usa las flechas); el disparo es automático. Derriba aviones enemigos, recoge estrellas ⭐ y no dejes que te toquen.</p>
+        <button class="btn btn-dorado" id="btnJugar">¡A volar!</button>
+        <button class="btn btn-azul" id="btnTopInicio">🏆 Ver Top 10</button>
+        <div id="topInicio"></div>
+    </div>
+    <div class="panel" id="panelFin">
+        <h2>Fin del vuelo</h2>
+        <p>Tu puntuación: <b id="puntosFin">0</b></p>
+        <input type="text" id="nombre" maxlength="12" placeholder="Tu nombre (máx. 12)" autocomplete="off">
+        <div class="error" id="errorGuardar"></div>
+        <button class="btn btn-dorado" id="btnGuardar">Guardar puntuación</button>
+        <div id="topFin"></div>
+        <button class="btn btn-azul" id="btnOtra">Volar otra vez</button>
+    </div>
+</div>
+<p class="nota">Las puntuaciones se guardan en la base de datos de Ag Lucem: el Top 10 es de todos los jugadores, no solo de este teléfono.</p>
+
+<script>
+(function () {
+    "use strict";
+    const API = "https://aglucem-api.adrian-camelot32.workers.dev";
+    const JUEGO = "avion";
+    const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+    const W = cv.width, H = cv.height;
+    const cara = new Image(); cara.src = "chema-cara.png";
+    const estrellaImg = new Image(); estrellaImg.src = "estrella.png";
+
+    let jugando = false, puntos = 0, vidas = 3, nivel = 1, frame = 0;
+    let balas = [], enemigos = [], estrellas = [], explosiones = [], nubes = [];
+    const avion = { x: W / 2, y: H - 110, w: 62, h: 62, tx: W / 2 };
+    let teclas = {};
+    let yaGuarde = false;
+
+    for (let i = 0; i < 7; i++) nubes.push({ x: Math.random() * W, y: Math.random() * H, s: 22 + Math.random() * 36, v: .4 + Math.random() * .7 });
+
+    function dibujarAvion(x, y, escala, enemigo) {
+        ctx.save(); ctx.translate(x, y); ctx.scale(escala, escala);
+        if (enemigo) ctx.rotate(Math.PI);
+        ctx.fillStyle = enemigo ? "#c0392b" : "#1d6fd1";
+        ctx.beginPath(); // fuselaje
+        ctx.moveTo(0, -26); ctx.quadraticCurveTo(7, -8, 6, 16); ctx.lineTo(-6, 16); ctx.quadraticCurveTo(-7, -8, 0, -26); ctx.fill();
+        ctx.fillStyle = enemigo ? "#e74c3c" : "#3f8fe0"; // alas
+        ctx.beginPath(); ctx.moveTo(-30, 10); ctx.lineTo(30, 10); ctx.lineTo(20, 20); ctx.lineTo(-20, 20); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = enemigo ? "#922b21" : "#155a9e"; // cola
+        ctx.beginPath(); ctx.moveTo(-13, 22); ctx.lineTo(13, 22); ctx.lineTo(8, 29); ctx.lineTo(-8, 29); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        if (!enemigo && cara.complete && cara.naturalWidth) {
+            ctx.save();
+            ctx.beginPath(); ctx.arc(x, y - 6, 13, 0, Math.PI * 2); ctx.clip();
+            ctx.drawImage(cara, x - 15, y - 19, 30, 22);
+            ctx.restore();
+            ctx.strokeStyle = "rgba(3,42,96,.6)"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(x, y - 6, 13, 0, Math.PI * 2); ctx.stroke();
+        }
+    }
+
+    function explotar(x, y) {
+        for (let i = 0; i < 14; i++) explosiones.push({ x, y, vx: (Math.random() - .5) * 4, vy: (Math.random() - .5) * 4, r: 2 + Math.random() * 4, vida: 22 + Math.random() * 12 });
+        if (navigator.vibrate) navigator.vibrate(40);
+    }
+
+    function paso() {
+        frame++;
+        ctx.clearRect(0, 0, W, H);
+        // nubes
+        ctx.fillStyle = "rgba(255,255,255,.75)";
+        nubes.forEach(function (n) {
+            n.y += n.v + 1.1; if (n.y > H + 40) { n.y = -40; n.x = Math.random() * W; }
+            ctx.beginPath(); ctx.arc(n.x, n.y, n.s, 0, Math.PI * 2); ctx.arc(n.x + n.s * .7, n.y + 4, n.s * .7, 0, Math.PI * 2); ctx.fill();
+        });
+        if (jugando) {
+            // movimiento
+            if (teclas.ArrowLeft) avion.tx -= 5;
+            if (teclas.ArrowRight) avion.tx += 5;
+            if (teclas.ArrowUp) avion.y -= 4;
+            if (teclas.ArrowDown) avion.y += 4;
+            avion.tx = Math.max(34, Math.min(W - 34, avion.tx));
+            avion.y = Math.max(50, Math.min(H - 50, avion.y));
+            avion.x += (avion.tx - avion.x) * .35;
+            // disparo
+            if (frame % 9 === 0) balas.push({ x: avion.x, y: avion.y - 30 });
+            // enemigos
+            const ritmo = Math.max(26, 62 - nivel * 5);
+            if (frame % ritmo === 0) enemigos.push({ x: 36 + Math.random() * (W - 72), y: -30, v: 1.6 + Math.random() * 1.3 + nivel * .22, vida: 1 });
+            if (frame % 540 === 0) estrellas.push({ x: 30 + Math.random() * (W - 60), y: -24, v: 2 });
+            nivel = 1 + Math.floor(puntos / 300);
+            document.getElementById("nivel").textContent = nivel;
+        }
+        // balas
+        ctx.fillStyle = "#FFD100";
+        balas = balas.filter(function (b) { b.y -= 9; return b.y > -12; });
+        balas.forEach(function (b) { ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); ctx.fill(); });
+        // estrellas
+        estrellas = estrellas.filter(function (e) { e.y += e.v; return e.y < H + 30; });
+        estrellas.forEach(function (e) {
+            if (estrellaImg.complete && estrellaImg.naturalWidth) ctx.drawImage(estrellaImg, e.x - 15, e.y - 15, 30, 30);
+            else { ctx.font = "24px serif"; ctx.fillText("⭐", e.x - 12, e.y + 8); }
+            if (jugando && Math.abs(e.x - avion.x) < 34 && Math.abs(e.y - avion.y) < 34) { puntos += 25; e.y = H + 99; pintarHud(); }
+        });
+        // enemigos
+        enemigos = enemigos.filter(function (e) { e.y += e.v; return e.y < H + 40 && e.vida > 0; });
+        enemigos.forEach(function (e) {
+            dibujarAvion(e.x, e.y, .92, true);
+            balas.forEach(function (b) {
+                if (Math.abs(b.x - e.x) < 24 && Math.abs(b.y - e.y) < 24 && e.vida > 0) { e.vida = 0; b.y = -99; puntos += 10; explotar(e.x, e.y); pintarHud(); }
+            });
+            if (jugando && Math.abs(e.x - avion.x) < 40 && Math.abs(e.y - avion.y) < 40) {
+                e.vida = 0; explotar(avion.x, avion.y); vidas--; pintarHud();
+                if (vidas <= 0) finDelJuego(); else { avion.x = W / 2; avion.tx = W / 2; avion.y = H - 110; }
+            }
+            if (e.y > H - 6 && jugando) { e.vida = 0; vidas--; pintarHud(); if (vidas <= 0) finDelJuego(); }
+        });
+        // explosiones
+        explosiones = explosiones.filter(function (p) { p.vida--; return p.vida > 0; });
+        explosiones.forEach(function (p) {
+            p.x += p.vx; p.y += p.vy;
+            ctx.fillStyle = "rgba(255," + (100 + Math.floor(Math.random() * 100)) + ",30,.85)";
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+        });
+        dibujarAvion(avion.x, avion.y, 1.05, false);
+        requestAnimationFrame(paso);
+    }
+
+    function pintarHud() {
+        document.getElementById("puntos").textContent = puntos;
+        document.getElementById("vidas").textContent = "♥".repeat(Math.max(0, vidas));
+    }
+
+    function empezar() {
+        puntos = 0; vidas = 3; nivel = 1; balas = []; enemigos = []; estrellas = []; yaGuarde = false;
+        avion.x = W / 2; avion.tx = W / 2; avion.y = H - 110;
+        pintarHud();
+        document.getElementById("panelInicio").classList.remove("visible");
+        document.getElementById("panelFin").classList.remove("visible");
+        jugando = true;
+    }
+
+    function finDelJuego() {
+        jugando = false;
+        document.getElementById("puntosFin").textContent = puntos;
+        document.getElementById("topFin").innerHTML = "";
+        document.getElementById("errorGuardar").textContent = "";
+        document.getElementById("btnGuardar").disabled = false;
+        document.getElementById("panelFin").classList.add("visible");
+    }
+
+    // Controles táctiles y de ratón
+    function mover(e) {
+        const r = cv.getBoundingClientRect();
+        const t = e.touches ? e.touches[0] : e;
+        avion.tx = (t.clientX - r.left) * (W / r.width);
+        avion.y = Math.max(50, Math.min(H - 50, (t.clientY - r.top) * (H / r.height) - 40));
+        if (e.cancelable) e.preventDefault();
+    }
+    cv.addEventListener("touchstart", mover, { passive: false });
+    cv.addEventListener("touchmove", mover, { passive: false });
+    cv.addEventListener("mousedown", mover);
+    cv.addEventListener("mousemove", function (e) { if (e.buttons) mover(e); });
+    document.addEventListener("keydown", function (e) { teclas[e.key] = true; });
+    document.addEventListener("keyup", function (e) { teclas[e.key] = false; });
+
+    // ===== Top 10 en la base de datos de Ag Lucem =====
+    function pintarTop(cont, mejores, miPosicion) {
+        if (!mejores || !mejores.length) { cont.innerHTML = '<p style="color:#9fb6dd">Todavía no hay puntuaciones. ¡Sé el primero!</p>'; return; }
+        let h = '<table class="top"><tr><th></th><th>Jugador</th><th style="text-align:right">Puntos</th></tr>';
+        mejores.forEach(function (m, i) {
+            h += '<tr' + (miPosicion === i + 1 ? ' class="mio"' : '') + '><td class="pos">' + (i + 1) + '.</td><td>' + String(m.nombre).replace(/</g, "&lt;") + '</td><td class="pts">' + m.puntos + '</td></tr>';
+        });
+        cont.innerHTML = h + "</table>";
+    }
+    function cargarTop(cont) {
+        cont.innerHTML = '<p style="color:#9fb6dd">Cargando…</p>';
+        fetch(API + "/juegos/" + JUEGO + "/puntuaciones")
+            .then(function (r) { if (!r.ok) throw new Error("sin"); return r.json(); })
+            .then(function (d) { pintarTop(cont, d.mejores, -1); })
+            .catch(function () { cont.innerHTML = '<p style="color:#9fb6dd">Sin conexión: no se pudo cargar el Top 10.</p>'; });
+    }
+    document.getElementById("btnTopInicio").addEventListener("click", function () { cargarTop(document.getElementById("topInicio")); });
+    document.getElementById("btnJugar").addEventListener("click", empezar);
+    document.getElementById("btnOtra").addEventListener("click", empezar);
+
+    const inpNombre = document.getElementById("nombre");
+    try { inpNombre.value = localStorage.getItem("chema-nombre") || ""; } catch (e) { /* sin almacenamiento */ }
+    document.getElementById("btnGuardar").addEventListener("click", function () {
+        if (yaGuarde) return;
+        const nombre = inpNombre.value.trim();
+        const err = document.getElementById("errorGuardar");
+        if (!nombre) { err.textContent = "Escribe tu nombre para guardar."; return; }
+        err.textContent = "";
+        try { localStorage.setItem("chema-nombre", nombre); } catch (e) { /* sin almacenamiento */ }
+        fetch(API + "/juegos/" + JUEGO + "/puntuaciones", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nombre: nombre, puntos: puntos })
+        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+          .then(function (res) {
+              if (res.ok && res.d.ok) {
+                  yaGuarde = true;
+                  document.getElementById("btnGuardar").disabled = true;
+                  pintarTop(document.getElementById("topFin"), res.d.mejores, res.d.posicion);
+                  err.style.color = "#8be08b";
+                  err.textContent = "¡Guardado! Quedaste en el lugar " + res.d.posicion + ".";
+              } else if (res.status === 400 && res.d.error) {
+                  err.style.color = "#ff9c9c"; err.textContent = res.d.error;
+              } else { err.style.color = "#ff9c9c"; err.textContent = "Sin conexión: no se pudo guardar."; }
+          })
+          .catch(function () { err.style.color = "#ff9c9c"; err.textContent = "Sin conexión: no se pudo guardar."; });
+    });
+
+    pintarHud();
+    requestAnimationFrame(paso);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tetris Chema — Minijuegos</title>
+<style>
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    body { font-family:'Segoe UI', system-ui, sans-serif; background:#141433; color:#fff; min-height:100dvh; display:flex; flex-direction:column; align-items:center; }
+    header { width:100%; max-width:480px; display:flex; align-items:center; gap:10px; padding:10px 14px; }
+    header a { color:#FFD100; text-decoration:none; font-weight:800; }
+    header h1 { font-size:1.15rem; flex:1; text-align:center; }
+    #hud { width:100%; max-width:480px; display:flex; justify-content:space-between; padding:2px 16px 8px; font-weight:800; font-size:.95rem; }
+    #lienzoWrap { position:relative; width:min(92vw, 340px); }
+    canvas { width:100%; display:block; border-radius:12px; background:#0a0a22; box-shadow:0 10px 30px rgba(0,0,0,.5); touch-action:none; }
+    .panel { position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; gap:10px; background:rgba(6,6,30,.86); border-radius:12px; padding:16px; text-align:center; overflow:auto; }
+    .panel.visible { display:flex; }
+    .panel h2 { color:#FFD100; font-size:1.4rem; }
+    .panel p { color:#dfe7ff; font-size:.92rem; }
+    .panel input { width:85%; max-width:250px; padding:10px 12px; border-radius:10px; border:2px solid #FFD100; font-size:1rem; font-family:inherit; text-align:center; }
+    .btn { border:none; border-radius:12px; padding:12px 18px; font-weight:800; font-size:1rem; cursor:pointer; font-family:inherit; }
+    .btn-dorado { background:#FFD100; color:#032A60; }
+    .btn-azul { background:#1d6fd1; color:#fff; }
+    .error { color:#ff9c9c; font-size:.86rem; min-height:1.1em; }
+    table.top { border-collapse:collapse; width:100%; max-width:290px; font-size:.9rem; }
+    table.top td, table.top th { padding:3px 7px; text-align:left; }
+    table.top tr.mio { background:rgba(255,209,0,.25); font-weight:800; }
+    table.top td.pos { color:#FFD100; font-weight:800; width:32px; }
+    table.top td.pts { text-align:right; font-weight:700; }
+    #controles { display:flex; gap:8px; margin:12px 0 4px; }
+    #controles button { width:60px; height:54px; border:none; border-radius:12px; background:#23235c; color:#fff; font-size:1.35rem; cursor:pointer; }
+    #controles button:active { background:#3a3a8c; }
+    .nota { color:#9a9ad0; font-size:.82rem; padding:8px 16px 18px; text-align:center; max-width:480px; }
+</style>
+</head>
+<body>
+<header>
+    <a href="index.html">← Menú</a>
+    <h1>🧩 Tetris Chema</h1>
+    <span style="width:52px"></span>
+</header>
+<div id="hud"><span>Puntos: <span id="puntos">0</span></span><span>Líneas: <span id="lineas">0</span></span><span>Nivel <span id="nivel">1</span></span></div>
+<div id="lienzoWrap">
+    <canvas id="cv" width="300" height="600"></canvas>
+    <div class="panel visible" id="panelInicio">
+        <h2>🧩 Tetris Chema</h2>
+        <p>El Tetris clásico, pero cada bloque lleva la cara de Chema. Completa líneas para sumar puntos y sube de nivel.</p>
+        <p>Botones de abajo o flechas del teclado: ← → mover, ↑ girar, ↓ bajar, espacio = soltar.</p>
+        <button class="btn btn-dorado" id="btnJugar">¡A jugar!</button>
+        <button class="btn btn-azul" id="btnTopInicio">🏆 Ver Top 10</button>
+        <div id="topInicio"></div>
+    </div>
+    <div class="panel" id="panelFin">
+        <h2>Fin de la partida</h2>
+        <p>Tu puntuación: <b id="puntosFin">0</b></p>
+        <input type="text" id="nombre" maxlength="12" placeholder="Tu nombre (máx. 12)" autocomplete="off">
+        <div class="error" id="errorGuardar"></div>
+        <button class="btn btn-dorado" id="btnGuardar">Guardar puntuación</button>
+        <div id="topFin"></div>
+        <button class="btn btn-azul" id="btnOtra">Jugar otra vez</button>
+    </div>
+</div>
+<div id="controles">
+    <button id="cIzq" aria-label="Izquierda">←</button>
+    <button id="cGiro" aria-label="Girar">⟳</button>
+    <button id="cDer" aria-label="Derecha">→</button>
+    <button id="cBaja" aria-label="Bajar">↓</button>
+    <button id="cSuelta" aria-label="Soltar">⤓</button>
+</div>
+<p class="nota">Las puntuaciones se guardan en la base de datos de Ag Lucem: el Top 10 es de todos los jugadores, no solo de este teléfono.</p>
+
+<script>
+(function () {
+    "use strict";
+    const API = "https://aglucem-api.adrian-camelot32.workers.dev";
+    const JUEGO = "tetris";
+    const COLS = 10, FILAS = 20, B = 30;
+    const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+    const cara = new Image(); cara.src = "chema-cara.png";
+
+    const FORMAS = {
+        I: { color: "#29b6f6", caja: 4, celdas: [[0,1],[1,1],[2,1],[3,1]] },
+        O: { color: "#FFD100", caja: 2, celdas: [[0,0],[1,0],[0,1],[1,1]] },
+        T: { color: "#ab47bc", caja: 3, celdas: [[1,0],[0,1],[1,1],[2,1]] },
+        S: { color: "#66bb6a", caja: 3, celdas: [[1,0],[2,0],[0,1],[1,1]] },
+        Z: { color: "#ef5350", caja: 3, celdas: [[0,0],[1,0],[1,1],[2,1]] },
+        J: { color: "#5c6bc0", caja: 3, celdas: [[0,0],[0,1],[1,1],[2,1]] },
+        L: { color: "#ffa726", caja: 3, celdas: [[2,0],[0,1],[1,1],[2,1]] }
+    };
+    const NOMBRES = Object.keys(FORMAS);
+    const PUNTOS_LINEA = [0, 100, 300, 500, 800];
+
+    let tablero, pieza, puntos, lineas, nivel, jugando, ultimoPaso, yaGuarde;
+
+    function nuevaPieza() {
+        const n = NOMBRES[Math.floor(Math.random() * NOMBRES.length)];
+        const f = FORMAS[n];
+        return { tipo: n, color: f.color, caja: f.caja, celdas: f.celdas.map(function (c) { return [c[0], c[1]]; }), x: 3, y: 0 };
+    }
+    function choca(p, dx, dy, celdas) {
+        const cs = celdas || p.celdas;
+        for (const c of cs) {
+            const x = p.x + c[0] + dx, y = p.y + c[1] + dy;
+            if (x < 0 || x >= COLS || y >= FILAS) return true;
+            if (y >= 0 && tablero[y][x]) return true;
+        }
+        return false;
+    }
+    function fijar() {
+        pieza.celdas.forEach(function (c) {
+            const x = pieza.x + c[0], y = pieza.y + c[1];
+            if (y < 0) { finDelJuego(); return; }
+            tablero[y][x] = pieza.color;
+        });
+        if (!jugando) return;
+        let limpias = 0;
+        for (let y = FILAS - 1; y >= 0; y--) {
+            if (tablero[y].every(function (v) { return v; })) {
+                tablero.splice(y, 1);
+                tablero.unshift(Array(COLS).fill(null));
+                limpias++; y++;
+            }
+        }
+        if (limpias) {
+            lineas += limpias;
+            puntos += PUNTOS_LINEA[limpias] * nivel;
+            nivel = 1 + Math.floor(lineas / 10);
+            pintarHud();
+        }
+        pieza = nuevaPieza();
+        if (choca(pieza, 0, 0)) finDelJuego();
+    }
+    function dibujarBloque(x, y, color) {
+        const px = x * B, py = y * B;
+        ctx.fillStyle = color;
+        ctx.fillRect(px + 1, py + 1, B - 2, B - 2);
+        ctx.fillStyle = "rgba(255,255,255,.28)";
+        ctx.fillRect(px + 1, py + 1, B - 2, 6);
+        ctx.strokeStyle = "rgba(0,0,0,.35)";
+        ctx.strokeRect(px + 1.5, py + 1.5, B - 3, B - 3);
+        if (cara.complete && cara.naturalWidth) {
+            ctx.save();
+            ctx.globalAlpha = .92;
+            ctx.drawImage(cara, px + 5, py + 7, B - 10, B - 13);
+            ctx.restore();
+        }
+    }
+    function dibujar() {
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        ctx.strokeStyle = "rgba(255,255,255,.05)";
+        for (let x = 1; x < COLS; x++) { ctx.beginPath(); ctx.moveTo(x * B, 0); ctx.lineTo(x * B, cv.height); ctx.stroke(); }
+        for (let y = 0; y < FILAS; y++) for (let x = 0; x < COLS; x++) if (tablero[y][x]) dibujarBloque(x, y, tablero[y][x]);
+        if (pieza && jugando) pieza.celdas.forEach(function (c) { dibujarBloque(pieza.x + c[0], pieza.y + c[1], pieza.color); });
+    }
+    function bucle(t) {
+        if (jugando) {
+            const intervalo = Math.max(90, 650 - (nivel - 1) * 55);
+            if (t - ultimoPaso > intervalo) {
+                ultimoPaso = t;
+                if (!choca(pieza, 0, 1)) pieza.y++; else fijar();
+                dibujar();
+            }
+        }
+        requestAnimationFrame(bucle);
+    }
+    function pintarHud() {
+        document.getElementById("puntos").textContent = puntos;
+        document.getElementById("lineas").textContent = lineas;
+        document.getElementById("nivel").textContent = nivel;
+    }
+    function empezar() {
+        tablero = Array.from({ length: FILAS }, function () { return Array(COLS).fill(null); });
+        puntos = 0; lineas = 0; nivel = 1; yaGuarde = false;
+        pieza = nuevaPieza(); jugando = true; ultimoPaso = performance.now();
+        pintarHud(); dibujar();
+        document.getElementById("panelInicio").classList.remove("visible");
+        document.getElementById("panelFin").classList.remove("visible");
+    }
+    function finDelJuego() {
+        jugando = false;
+        document.getElementById("puntosFin").textContent = puntos;
+        document.getElementById("topFin").innerHTML = "";
+        document.getElementById("errorGuardar").textContent = "";
+        document.getElementById("btnGuardar").disabled = false;
+        document.getElementById("panelFin").classList.add("visible");
+    }
+    function mover(dx) { if (jugando && !choca(pieza, dx, 0)) { pieza.x += dx; dibujar(); } }
+    function girar() {
+        if (!jugando || pieza.tipo === "O") return;
+        const caja = pieza.caja;
+        const rot = pieza.celdas.map(function (c) { return [caja - 1 - c[1], c[0]]; });
+        if (!choca(pieza, 0, 0, rot)) { pieza.celdas = rot; dibujar(); return; }
+        // Desplaza un poco si está pegada a una pared
+        if (!choca(pieza, -1, 0, rot)) { pieza.x -= 1; pieza.celdas = rot; dibujar(); return; }
+        if (!choca(pieza, 1, 0, rot)) { pieza.x += 1; pieza.celdas = rot; dibujar(); }
+    }
+    function bajar() { if (jugando) { if (!choca(pieza, 0, 1)) { pieza.y++; puntos += 1; } else fijar(); pintarHud(); dibujar(); } }
+    function soltar() { if (!jugando) return; let n = 0; while (!choca(pieza, 0, 1)) { pieza.y++; n++; } puntos += n * 2; fijar(); pintarHud(); dibujar(); }
+
+    document.getElementById("cIzq").addEventListener("click", function () { mover(-1); });
+    document.getElementById("cDer").addEventListener("click", function () { mover(1); });
+    document.getElementById("cGiro").addEventListener("click", girar);
+    document.getElementById("cBaja").addEventListener("click", bajar);
+    document.getElementById("cSuelta").addEventListener("click", soltar);
+    document.addEventListener("keydown", function (e) {
+        if (!jugando) return;
+        if (e.key === "ArrowLeft") mover(-1);
+        else if (e.key === "ArrowRight") mover(1);
+        else if (e.key === "ArrowDown") bajar();
+        else if (e.key === "ArrowUp") girar();
+        else if (e.key === " ") { e.preventDefault(); soltar(); }
+    });
+    // Deslizar sobre el lienzo: izquierda/derecha mueve, abajo suelta, toque gira
+    let tx0 = null, ty0 = null;
+    cv.addEventListener("touchstart", function (e) { tx0 = e.touches[0].clientX; ty0 = e.touches[0].clientY; }, { passive: true });
+    cv.addEventListener("touchend", function (e) {
+        if (tx0 === null) return;
+        const dx = e.changedTouches[0].clientX - tx0, dy = e.changedTouches[0].clientY - ty0;
+        if (Math.abs(dx) < 12 && Math.abs(dy) < 12) girar();
+        else if (Math.abs(dx) > Math.abs(dy)) mover(dx > 0 ? 1 : -1);
+        else if (dy > 24) soltar(); else bajar();
+        tx0 = null;
+    }, { passive: true });
+
+    // ===== Top 10 en la base de datos de Ag Lucem =====
+    function pintarTop(cont, mejores, miPosicion) {
+        if (!mejores || !mejores.length) { cont.innerHTML = '<p style="color:#9a9ad0">Todavía no hay puntuaciones. ¡Sé el primero!</p>'; return; }
+        let h = '<table class="top"><tr><th></th><th>Jugador</th><th style="text-align:right">Puntos</th></tr>';
+        mejores.forEach(function (m, i) {
+            h += '<tr' + (miPosicion === i + 1 ? ' class="mio"' : '') + '><td class="pos">' + (i + 1) + '.</td><td>' + String(m.nombre).replace(/</g, "&lt;") + '</td><td class="pts">' + m.puntos + '</td></tr>';
+        });
+        cont.innerHTML = h + "</table>";
+    }
+    function cargarTop(cont) {
+        cont.innerHTML = '<p style="color:#9a9ad0">Cargando…</p>';
+        fetch(API + "/juegos/" + JUEGO + "/puntuaciones")
+            .then(function (r) { if (!r.ok) throw new Error("sin"); return r.json(); })
+            .then(function (d) { pintarTop(cont, d.mejores, -1); })
+            .catch(function () { cont.innerHTML = '<p style="color:#9a9ad0">Sin conexión: no se pudo cargar el Top 10.</p>'; });
+    }
+    document.getElementById("btnTopInicio").addEventListener("click", function () { cargarTop(document.getElementById("topInicio")); });
+    document.getElementById("btnJugar").addEventListener("click", empezar);
+    document.getElementById("btnOtra").addEventListener("click", empezar);
+
+    const inpNombre = document.getElementById("nombre");
+    try { inpNombre.value = localStorage.getItem("chema-nombre") || ""; } catch (e) { /* sin almacenamiento */ }
+    document.getElementById("btnGuardar").addEventListener("click", function () {
+        if (yaGuarde) return;
+        const nombre = inpNombre.value.trim();
+        const err = document.getElementById("errorGuardar");
+        if (!nombre) { err.textContent = "Escribe tu nombre para guardar."; return; }
+        err.textContent = "";
+        try { localStorage.setItem("chema-nombre", nombre); } catch (e) { /* sin almacenamiento */ }
+        fetch(API + "/juegos/" + JUEGO + "/puntuaciones", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ nombre: nombre, puntos: puntos })
+        }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+          .then(function (res) {
+              if (res.ok && res.d.ok) {
+                  yaGuarde = true;
+                  document.getElementById("btnGuardar").disabled = true;
+                  pintarTop(document.getElementById("topFin"), res.d.mejores, res.d.posicion);
+                  err.style.color = "#8be08b";
+                  err.textContent = "¡Guardado! Quedaste en el lugar " + res.d.posicion + ".";
+              } else if (res.status === 400 && res.d.error) {
+                  err.style.color = "#ff9c9c"; err.textContent = res.d.error;
+              } else { err.style.color = "#ff9c9c"; err.textContent = "Sin conexión: no se pudo guardar."; }
+          })
+          .catch(function () { err.style.color = "#ff9c9c"; err.textContent = "Sin conexión: no se pudo guardar."; });
+    });
+
+    tablero = Array.from({ length: FILAS }, function () { return Array(COLS).fill(null); });
+    pintarHud(); dibujar();
+    requestAnimationFrame(bucle);
+})();
+</script>
+</body>
+</html>
