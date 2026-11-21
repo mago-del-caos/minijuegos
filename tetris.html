@@ -6,13 +6,20 @@
 <title>Tetris Chema — Minijuegos</title>
 <style>
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-    body { font-family:'Segoe UI', system-ui, sans-serif; background:#141433; color:#fff; min-height:100dvh; display:flex; flex-direction:column; align-items:center; }
+    body { font-family:'Segoe UI', system-ui, sans-serif; background:
+            radial-gradient(circle at 12% 22%, rgba(255,209,0,.35) 0 5px, transparent 6px),
+            radial-gradient(circle at 86% 14%, rgba(255,77,121,.4) 0 4px, transparent 5px),
+            radial-gradient(circle at 78% 68%, rgba(0,229,255,.3) 0 4px, transparent 5px),
+            radial-gradient(circle at 22% 82%, rgba(255,77,121,.3) 0 5px, transparent 6px),
+            radial-gradient(circle at 55% 40%, rgba(255,255,255,.18) 0 3px, transparent 4px),
+            linear-gradient(160deg, #c9a7eb 0%, #9d6bc9 34%, #6a3fa0 68%, #45246e 100%);
+        background-attachment: fixed; color:#fff; min-height:100dvh; display:flex; flex-direction:column; align-items:center; }
     header { width:100%; max-width:480px; display:flex; align-items:center; gap:10px; padding:10px 14px; }
     header a { color:#FFD100; text-decoration:none; font-weight:800; }
     header h1 { font-size:1.15rem; flex:1; text-align:center; }
     #hud { width:100%; max-width:480px; display:flex; justify-content:space-between; padding:2px 16px 8px; font-weight:800; font-size:.95rem; }
-    #lienzoWrap { position:relative; width:min(92vw, 340px); }
-    canvas { width:100%; display:block; border-radius:12px; background:#0a0a22; box-shadow:0 10px 30px rgba(0,0,0,.5); touch-action:none; }
+    #lienzoWrap { position:relative; width:min(92vw, 340px, calc((100dvh - 215px) / 2)); }
+    canvas { width:100%; display:block; border-radius:12px; background:linear-gradient(180deg, #3b1d6e 0%, #2a1650 55%, #1c0d38 100%); box-shadow:0 10px 30px rgba(40,10,80,.5), 0 0 0 3px rgba(255,209,0,.55); touch-action:none; }
     .panel { position:absolute; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; gap:10px; background:rgba(6,6,30,.86); border-radius:12px; padding:16px; text-align:center; overflow:auto; }
     .panel.visible { display:flex; }
     .panel h2 { color:#FFD100; font-size:1.4rem; }
