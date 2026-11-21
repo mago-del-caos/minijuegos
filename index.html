@@ -3,66 +3,124 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Minijuegos de Chema</title>
+<title>CHEMA-TRON · Tienda de juegos</title>
 <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family:'Segoe UI', system-ui, sans-serif; background:linear-gradient(160deg, #032A60, #123c7a 55%, #5B3E99); color:#fff; min-height:100dvh; }
-    .wrap { max-width:860px; margin:0 auto; padding:26px 16px 40px; }
-    h1 { text-align:center; font-size:2rem; color:#FFD100; text-shadow:0 3px 10px rgba(0,0,0,.4); }
-    .sub { text-align:center; color:#cfe0ff; margin:6px 0 24px; }
-    .grid { display:grid; grid-template-columns:1fr; gap:14px; }
-    @media (min-width:640px){ .grid{ grid-template-columns:1fr 1fr; } }
-    .card { display:block; text-decoration:none; color:#fff; border-radius:18px; padding:20px; box-shadow:0 8px 22px rgba(0,0,0,.35); transition:transform .12s ease; }
-    .card:active { transform:scale(.98); }
-    .card .icono-img { height:96px; max-width:100%; object-fit:contain; display:block; filter:drop-shadow(0 4px 8px rgba(0,0,0,.35)); }
-    .card h2 { margin:6px 0 4px; font-size:1.3rem; }
-    .card p { color:rgba(255,255,255,.85); font-size:.92rem; }
-    .c-flappy { background:linear-gradient(135deg,#1A7637,#2FA84F); }
-    .c-angry { background:linear-gradient(135deg,#c2570b,#e07b24); }
-    .c-avion { background:linear-gradient(135deg,#155a9e,#1d6fd1); }
-    .c-tetris { background:linear-gradient(135deg,#5e35b1,#7e57c2); }
-    .tops { margin-top:30px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.16); border-radius:18px; padding:18px; }
-    .tops h2 { color:#FFD100; text-align:center; margin-bottom:6px; }
-    .tops .rejilla { display:grid; grid-template-columns:1fr; gap:16px; margin-top:10px; }
-    @media (min-width:640px){ .tops .rejilla{ grid-template-columns:1fr 1fr; } }
-    .tops h3 { font-size:1rem; margin-bottom:6px; }
+    body {
+        font-family:'Segoe UI', system-ui, sans-serif; color:#e8f6ff; min-height:100dvh;
+        background:
+            radial-gradient(ellipse 80% 45% at 50% -5%, rgba(255,110,0,.28), transparent 60%),
+            radial-gradient(ellipse 70% 40% at 50% 108%, rgba(0,229,255,.22), transparent 60%),
+            linear-gradient(#05060f, #0a0d24 55%, #05060f);
+        overflow-x:hidden;
+    }
+    /* Rejilla retro en perspectiva */
+    .grid-floor {
+        position:fixed; left:-25%; right:-25%; bottom:-6%; height:38vh; pointer-events:none; z-index:0;
+        background:
+            repeating-linear-gradient(90deg, rgba(0,229,255,.35) 0 2px, transparent 2px 64px),
+            repeating-linear-gradient(0deg, rgba(255,110,0,.30) 0 2px, transparent 2px 42px);
+        transform:perspective(340px) rotateX(62deg);
+        mask-image:linear-gradient(to top, black 55%, transparent);
+        -webkit-mask-image:linear-gradient(to top, black 55%, transparent);
+    }
+    .wrap { position:relative; z-index:1; max-width:880px; margin:0 auto; padding:22px 16px 44px; }
+    .hero { text-align:center; }
+    .hero img {
+        width:min(88vw, 520px); border-radius:18px; display:block; margin:0 auto;
+        border:2px solid rgba(0,229,255,.65);
+        box-shadow:0 0 22px rgba(0,229,255,.45), 0 0 60px rgba(255,110,0,.25);
+    }
+    h1 {
+        margin-top:16px; font-size:2.6rem; letter-spacing:6px; font-weight:900; color:#eafcff;
+        text-shadow:0 0 6px #00e5ff, 0 0 18px #00e5ff, 0 0 42px rgba(0,229,255,.7), 3px 3px 0 #ff6a00;
+    }
+    .tagline { color:#9fd8ef; letter-spacing:2.5px; text-transform:uppercase; font-size:.78rem; margin-top:6px; }
+    .sub { text-align:center; color:#c8b8ff; margin:12px auto 24px; max-width:560px; font-size:.95rem; }
+    .vitrina { display:grid; grid-template-columns:1fr; gap:16px; }
+    @media (min-width:640px){ .vitrina{ grid-template-columns:1fr 1fr; } }
+    .producto {
+        position:relative; display:block; text-decoration:none; color:#e8f6ff; border-radius:16px; padding:18px;
+        background:linear-gradient(165deg, rgba(10,16,40,.92), rgba(16,10,38,.92));
+        border:1.5px solid var(--neon, #00e5ff);
+        box-shadow:0 0 14px color-mix(in srgb, var(--neon, #00e5ff) 45%, transparent), inset 0 0 24px rgba(0,0,0,.5);
+        transition:transform .12s ease, box-shadow .12s ease;
+    }
+    .producto:active { transform:scale(.98); }
+    .producto .portada { height:110px; max-width:100%; object-fit:contain; display:block; margin:2px auto 10px; filter:drop-shadow(0 0 10px rgba(0,0,0,.6)); }
+    .producto h2 { font-size:1.22rem; letter-spacing:1px; text-align:center; }
+    .producto p { color:#a9c6de; font-size:.9rem; text-align:center; margin-top:4px; min-height:2.4em; }
+    .fila { display:flex; justify-content:space-between; align-items:center; margin-top:12px; }
+    .precio { color:#7dff9a; font-weight:900; letter-spacing:2px; font-size:.85rem; text-shadow:0 0 8px rgba(60,255,130,.8); }
+    .btn-jugar {
+        background:var(--neon, #00e5ff); color:#04121c; font-weight:900; letter-spacing:1.5px;
+        padding:9px 18px; border-radius:9px; font-size:.9rem; box-shadow:0 0 14px var(--neon, #00e5ff);
+    }
+    .cinta {
+        position:absolute; top:12px; right:-8px; background:#ff2e88; color:#fff; font-size:.68rem; font-weight:900;
+        letter-spacing:1.5px; padding:4px 10px; border-radius:4px; box-shadow:0 0 12px rgba(255,46,136,.8);
+    }
+    .p-flappy { --neon:#3dff73; } .p-angry { --neon:#ff6a00; } .p-avion { --neon:#00e5ff; } .p-tetris { --neon:#c44dff; }
+    .salon {
+        margin-top:32px; border-radius:18px; padding:20px 18px;
+        background:linear-gradient(170deg, rgba(8,12,34,.94), rgba(20,8,36,.94));
+        border:1.5px solid rgba(255,209,0,.75); box-shadow:0 0 18px rgba(255,209,0,.35), inset 0 0 30px rgba(0,0,0,.5);
+    }
+    .salon h2 { color:#FFD100; text-align:center; letter-spacing:3px; text-shadow:0 0 12px rgba(255,209,0,.8); }
+    .salon .rejilla { display:grid; grid-template-columns:1fr; gap:18px; margin-top:14px; }
+    @media (min-width:640px){ .salon .rejilla{ grid-template-columns:1fr 1fr; } }
+    .salon h3 { font-size:1rem; margin-bottom:6px; color:#ffe98a; }
     table.top { border-collapse:collapse; width:100%; font-size:.9rem; }
-    table.top td, table.top th { padding:3px 7px; text-align:left; }
+    table.top td { padding:3px 7px; }
     table.top td.pos { color:#FFD100; font-weight:800; width:32px; }
-    table.top td.pts { text-align:right; font-weight:700; }
-    .sin { color:#9fb6dd; font-size:.88rem; }
-    .pie { text-align:center; color:#8fa8d0; font-size:.8rem; margin-top:22px; }
+    table.top td.pts { text-align:right; font-weight:700; color:#7dff9a; }
+    .sin { color:#8fa8d0; font-size:.88rem; }
+    .pie { text-align:center; color:#5f7ba6; font-size:.78rem; margin-top:26px; letter-spacing:1.5px; }
 </style>
 </head>
 <body>
+<div class="grid-floor"></div>
 <div class="wrap">
-    <h1>🎮 Minijuegos de Chema</h1>
-    <p class="sub">Cuatro juegos, cuatro tablas de campeones. Las puntuaciones se guardan en la base de datos de Ag Lucem: el Top 10 es de todos.</p>
-    <div class="grid">
-        <a class="card c-flappy" href="juegos.html">
-            <img class="icono-img" src="logo-flappy.png" alt="Chema Bird">
+    <div class="hero">
+        <img src="chematron.jpg" alt="Chema estilo Tron">
+        <h1>CHEMA-TRON</h1>
+        <p class="tagline">Tienda de juegos · Retro futurista</p>
+        <p class="sub">Inserta tu ficha imaginaria y juega. Cuatro juegos, cuatro tablas de campeones guardadas en la base de datos de Ag Lucem.</p>
+    </div>
+
+    <div class="vitrina">
+        <a class="producto p-flappy" href="juegos.html">
+            <span class="cinta">TOP 10</span>
+            <img class="portada" src="logo-flappy.png" alt="Chema Bird">
             <h2>Chema Bird · Flappy</h2>
             <p>Vuela entre tubos con Chema. Toca para aletear y no te estrelles.</p>
+            <div class="fila"><span class="precio">GRATIS</span><span class="btn-jugar">▶ JUGAR</span></div>
         </a>
-        <a class="card c-angry" href="juegos.html">
-            <img class="icono-img" src="logo-angry.png" alt="Angry Chema">
+        <a class="producto p-angry" href="juegos.html">
+            <span class="cinta">TOP 10</span>
+            <img class="portada" src="logo-angry.png" alt="Angry Chema">
             <h2>Angry Chema</h2>
             <p>Resortera y física: derriba las torres de los duendes en 3 niveles, con poder de hielo.</p>
+            <div class="fila"><span class="precio">GRATIS</span><span class="btn-jugar">▶ JUGAR</span></div>
         </a>
-        <a class="card c-avion" href="avion.html">
-            <img class="icono-img" src="chema-vuelo.png" alt="Avión Chema">
+        <a class="producto p-avion" href="avion.html">
+            <span class="cinta">NUEVO</span>
+            <img class="portada" src="chema-vuelo.png" alt="Avión Chema">
             <h2>Avión Chema</h2>
             <p>El clásico juego de aviones: derriba enemigos, recoge estrellas y sobrevive.</p>
+            <div class="fila"><span class="precio">GRATIS</span><span class="btn-jugar">▶ JUGAR</span></div>
         </a>
-        <a class="card c-tetris" href="tetris.html">
-            <img class="icono-img" src="chema-cara.png" alt="Tetris Chema">
+        <a class="producto p-tetris" href="tetris.html">
+            <span class="cinta">NUEVO</span>
+            <img class="portada" src="chema-cara.png" alt="Tetris Chema">
             <h2>Tetris Chema</h2>
             <p>El Tetris de siempre, con la cara de Chema en cada bloque.</p>
+            <div class="fila"><span class="precio">GRATIS</span><span class="btn-jugar">▶ JUGAR</span></div>
         </a>
     </div>
 
-    <section class="tops">
-        <h2>🏆 Mejores puntuaciones</h2>
+    <section class="salon">
+        <h2>🏆 SALÓN DE CAMPEONES</h2>
         <div class="rejilla">
             <div><h3>🐦 Flappy</h3><div id="top-flappy"><p class="sin">Cargando…</p></div></div>
             <div><h3>🎯 Angry Chema</h3><div id="top-angry"><p class="sin">Cargando…</p></div></div>
@@ -70,7 +128,7 @@
             <div><h3>🧩 Tetris Chema</h3><div id="top-tetris"><p class="sin">Cargando…</p></div></div>
         </div>
     </section>
-    <p class="pie">Minijuegos del Instituto Juventud · Hechos con Chema el águila</p>
+    <p class="pie">CHEMA-TRON · INSTITUTO JUVENTUD · © 2026</p>
 </div>
 <script>
 (function () {
